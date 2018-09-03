@@ -84,59 +84,68 @@ namespace crossover {
             }
             
             struct application::impl final {
-                atomic<bool> stop = {false};
+                impl(const std::chrono::minutes& period_):
+                period(period_){
+                    if (period < chrono::minutes(1)) {
+                        throw invalid_argument("Invalid arguments to application constructor");
+                    }
+                }
+                atomic<bool> stoprequirement = {false};
                 atomic<bool> running = {false};
+                const std::chrono::minutes period;
+                void run()
+                {
+                    if (running) {
+                        LOG(warning) << "application::run already running, ignoring call";
+                        return;
+                    }
+                    
+                    running = true;
+                    
+                    LOG(info) << "Starting application loop";
+                    utils::scope_exit exit_guard([this] {
+                        running = false;
+                        stoprequirement = false;
+                        
+                        LOG(info) << "Exiting application loop";
+                    });
+                    
+                    const chrono::milliseconds resolution(100);
+                    do {
+                        try {
+                            using namespace web;
+                            auto collected_data = collect_data();
+                            const json::value jsondata(data_to_json(collected_data));
+                            LOG(info) << jsondata.to_string() << endl;
+                        }
+                        catch (const std::exception& e) {
+                            LOG(error) << "Failed to collect and send data to server: "
+                            << e.what();
+                        }
+                    } while (utils::interruptible_sleep(period, resolution, stoprequirement) !=
+                             utils::interruptible_sleep_result::interrupted);
+                }
+                void stop() noexcept {
+                    if (running) {
+                        LOG(info) << "Stop requested, waiting for tasks to finish";
+                        stoprequirement = true;
+                    }
+                }
             };
             
-            application::application(
-                                     const std::chrono::minutes& period) :
-            pimpl_(new impl),
-            period_(period) {
-                if (period_ < chrono::minutes(1)) {
-                    throw invalid_argument("Invalid arguments to application constructor");
-                }
+            application::application(const std::chrono::minutes& period) :
+            pimpl_(new impl(period)) {
             }
             
             application::~application() {
             }
             
             void application::run() {
-                if (pimpl_->running) {
-                    LOG(warning) << "application::run already running, ignoring call";
-                    return;
-                }
-                
-                pimpl_->running = true;
-                
-                LOG(info) << "Starting application loop";
-                utils::scope_exit exit_guard([this] {
-                    pimpl_->running = false;
-                    pimpl_->stop = false;
-                    
-                    LOG(info) << "Exiting application loop";
-                });
-                
-                const chrono::milliseconds resolution(100);
-                do {
-                    try {
-                        using namespace web;
-                        auto collected_data = collect_data();
-                        const json::value jsondata(data_to_json(collected_data));
-                        LOG(info) << jsondata.to_string() << endl;
-                    }
-                    catch (const std::exception& e) {
-                        LOG(error) << "Failed to collect and send data to server: "
-                        << e.what();
-                    }
-                } while (utils::interruptible_sleep(period_, resolution, pimpl_->stop) !=
-                         utils::interruptible_sleep_result::interrupted);
+                pimpl_->run();
             }
             
             void application::stop() noexcept {
-                if (pimpl_->running) {
-                    LOG(info) << "Stop requested, waiting for tasks to finish";
-                    pimpl_->stop = true;
-                }
+                pimpl_->stop();
             }
             
         } //namespace client

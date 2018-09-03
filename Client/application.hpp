@@ -38,7 +38,6 @@ private:
 	struct impl;
 
 	std::unique_ptr<impl> pimpl_;
-	const std::chrono::minutes period_;
 }; //class application
 
 } //namespace client

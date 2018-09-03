@@ -98,7 +98,6 @@ namespace crossover {
             }
             
             application::~application() {
-                delete pimpl_.get();
             }
             
             void application::run() {

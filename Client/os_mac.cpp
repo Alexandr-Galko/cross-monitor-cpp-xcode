@@ -20,7 +20,12 @@ namespace crossover {
         namespace client {
             namespace os {
                 unsigned process_count() noexcept {
-                    return 1;
+                    unsigned procCount = 0;
+                    int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0 };
+                    size_t length = 0;
+                    sysctl(mib, (sizeof(mib) / sizeof(*mib)) - 1, NULL, &length, NULL, 0);
+                    procCount = length / sizeof(kinfo_proc);
+                    return procCount;
                 }
                 float cpu_use_percent() noexcept {
                     host_cpu_load_info_data_t cpuinfo;
